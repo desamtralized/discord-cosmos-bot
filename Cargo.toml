@@ -1,0 +1,21 @@
+[package]
+name = "local-money-fiat-price-aggregator"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+average = "0.13.1"
+anyhow = "1.0.65"
+base64 = "0.13.1"
+bip39 = "1.0.1"
+cosmrs = { version = "0.11.0", features = ["cosmwasm", "rpc"] }
+cosmwasm-std = "1.0.0"
+discord = { git = "https://github.com/SpaceManiac/discord-rs" }
+dotenv = "0.15.0"
+dotenv_codegen = "0.15.0"
+reqwest = { version = "0.11.12", features = ["json"] }
+serde = { version = "1.0.145", default-features = false, features = ["derive"] }
+serde_json = "1.0.86"
+tokio = { version = "1.21.2", features = ["full"] }
