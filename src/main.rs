@@ -5,11 +5,10 @@ pub mod shared;
 
 use bip39::Mnemonic;
 use cosmrs::{
-    bip32,
+    bank, bip32,
     crypto::secp256k1,
-    feegrant,
     tx::{BodyBuilder, Msg},
-    AccountId, Any, Coin,
+    AccountId, Coin,
 };
 use cosmwasm_std::Uint128;
 use discord::{
@@ -17,6 +16,7 @@ use discord::{
     Discord,
 };
 use shared::AccountResponse;
+use sled::Db;
 use std::{env, str::FromStr};
 
 const SUPPORTED_DENOMS: &'static [&'static str] = &["ukuji"];
@@ -81,25 +81,17 @@ async fn handle_send_coins(discord: &Discord, message: &Message) {
 
     // Create a cosmrs::Coin from the amount and denom.
     let coin = Coin::new(Uint128::from_str(amount).unwrap().u128(), denom).unwrap();
-    // create BasicaAllowance from the coin.
-    let basic_allowance = feegrant::BasicAllowance {
-        spend_limit: vec![coin],
-        expiration: None,
+
+    // Create a send message.
+    let send_msg = bank::MsgSend {
+        from_address: AccountId::from_str("").unwrap(),
+        to_address: AccountId::from_str("").unwrap(),
+        amount: vec![coin],
     }
     .into_any()
     .unwrap();
 
-    // Create MsgGrantAllowance to pay for fees.
-    let sender_addr = "kujira1gqhxtrsve4f2pcp65fr8l5t86pu7v0cx8kptcv";
-    let granter = AccountId::from_str(sender_addr).unwrap();
-    let grantee = AccountId::from_str("kujira1g65s9hctnz89m0rqgs2tmuzjqsy998mxsfg9px").unwrap();
-    let msg_grant_allowance = feegrant::MsgGrantAllowance {
-        granter: granter.clone(),
-        grantee,
-        allowance: Some(basic_allowance.clone()),
-    }
-    .into_any()
-    .unwrap();
+    let user_id = message.author.id.to_string();
 
     // Fetch the account details of the granter.
     let account_data = fetch_account_details(&granter).await.unwrap();
@@ -114,6 +106,30 @@ async fn handle_send_coins(discord: &Discord, message: &Message) {
     // kujirad tx bank send kujira1gqhxtrsve4f2pcp65fr8l5t86pu7v0cx8kptcv kujira1g65s9hctnz89m0rqgs2tmuzjqsy998mxsfg9px 200000ukuji --from taker --generate-only > tx.json
     // # Exec Tx
     // kujirad tx authz exec tx.json --from cryptoless --fee-account kujira1gqhxtrsve4f2pcp65fr8l5t86pu7v0cx8kptcv $GAS -y -b block
+}
+
+fn get_or_create_wallet_for_user(user_id: String) -> Mnemonic {
+    let path = "db";
+    let db = sled::open(path).unwrap();
+    if db.contains_key(user_id).unwrap() {
+        let wallet = db.get(user_id).unwrap();
+        match wallet {
+            Some(wallet) => {
+                let phrase = String::from_utf8(wallet.to_vec()).unwrap();
+                return Mnemonic::from_str(phrase.as_str()).unwrap();
+            }
+            None => {}
+        }
+    }
+    create_mnemonic(&db, &user_id)
+}
+
+fn create_mnemonic(db: &Db, user_id: &String) -> Mnemonic {
+    let mnemonic = Mnemonic::generate_in(bip39::Language::English, 12).unwrap();
+    // TODO, we can generate a salted passphrase from the user_id.
+    let phrase = mnemonic.to_string();
+    db.insert(user_id, phrase.as_bytes()).unwrap();
+    mnemonic
 }
 
 /// Send an error message to the user.
